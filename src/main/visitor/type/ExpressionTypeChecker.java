@@ -2,6 +2,7 @@ package main.visitor.type;
 
 import main.ast.nodes.expression.*;
 import main.ast.nodes.expression.operators.BinaryOperator;
+import main.ast.nodes.expression.operators.UnaryOperator;
 import main.ast.nodes.expression.values.primitive.BoolValue;
 import main.ast.nodes.expression.values.primitive.IntValue;
 import main.ast.types.NoType;
@@ -158,7 +159,43 @@ public class ExpressionTypeChecker extends Visitor<Type> {
 
     @Override
     public Type visit(UnaryExpression unaryExpression) {
-        //Todo
+        UnaryOperator operator;
+        Expression rValue;
+
+        rValue = unaryExpression.getOperand();
+        operator = unaryExpression.getOperator();
+
+        Type typeRValue = rValue.accept(this);
+
+        // minus
+        if(
+                operator == UnaryOperator.minus
+        ) {
+            if(typeRValue instanceof IntType) { // int -> int
+                return new IntType();
+            }
+            if(typeRValue instanceof NoType) { // noType -> noType
+                return new NoType();
+            }
+
+            //Error
+            unaryExpression.addError(new UnsupportedOperandType(unaryExpression.getLine(), operator.name()));
+        }
+
+        // not
+        if(
+                operator == UnaryOperator.not
+        ) {
+            if(typeRValue instanceof BoolType) { // bool -> bool
+                return new BoolType();
+            }
+            if(typeRValue instanceof NoType) { // noType -> noType
+                return new NoType();
+            }
+
+            //Error
+            unaryExpression.addError(new UnsupportedOperandType(unaryExpression.getLine(), operator.name()));
+        }
         return null;
     }
 
