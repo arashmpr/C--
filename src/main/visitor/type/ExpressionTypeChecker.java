@@ -5,16 +5,28 @@ import main.ast.nodes.expression.operators.BinaryOperator;
 import main.ast.nodes.expression.operators.UnaryOperator;
 import main.ast.nodes.expression.values.primitive.BoolValue;
 import main.ast.nodes.expression.values.primitive.IntValue;
+import main.ast.types.ListType;
 import main.ast.types.NoType;
 import main.ast.types.Type;
 import main.ast.types.primitives.BoolType;
 import main.ast.types.primitives.IntType;
+import main.ast.types.primitives.VoidType;
 import main.compileError.CompileError;
+import main.compileError.typeError.AccessByIndexOnNonList;
+import main.compileError.typeError.ListIndexNotInt;
 import main.compileError.typeError.UnsupportedOperandType;
+import main.compileError.typeError.VarNotDeclared;
+import main.symbolTable.SymbolTable;
+import main.symbolTable.exceptions.ItemNotFoundException;
+import main.symbolTable.items.FunctionSymbolTableItem;
+import main.symbolTable.items.StructSymbolTableItem;
+import main.symbolTable.items.SymbolTableItem;
+import main.symbolTable.items.VariableSymbolTableItem;
 import main.visitor.Visitor;
 
 import javax.naming.BinaryRefAddr;
 import javax.xml.stream.events.NotationDeclaration;
+import java.time.temporal.ValueRange;
 
 public class ExpressionTypeChecker extends Visitor<Type> {
 
@@ -207,13 +219,39 @@ public class ExpressionTypeChecker extends Visitor<Type> {
 
     @Override
     public Type visit(Identifier identifier) {
-        //Todo
-        return null;
+        try {
+            SymbolTableItem variableSymbolTableItem = SymbolTable.top.getItem(VariableSymbolTableItem.START_KEY + identifier.getName());
+            return ((VariableSymbolTableItem) variableSymbolTableItem).getType();
+        } catch (ItemNotFoundException error) {
+            identifier.addError(new VarNotDeclared(identifier.getLine(), identifier.getName()));
+            return new NoType();
+        }
     }
 
     @Override
     public Type visit(ListAccessByIndex listAccessByIndex) {
-        //Todo
+        Expression list;
+        Expression index;
+
+        Type listType;
+        Type indexType;
+
+        list = listAccessByIndex.getInstance();
+        index = listAccessByIndex.getIndex();
+        listType = list.accept(this);
+        indexType = index.accept(this);
+
+        if(indexType instanceof IntType && listType instanceof ListType) {
+            return new ListType(listType);
+        }
+        if(indexType instanceof IntType && listType instanceof NoType) {
+            return new NoType();
+        }
+        if(!(indexType instanceof IntType)) {
+            listAccessByIndex.addError(new ListIndexNotInt(listAccessByIndex.getLine()));
+        } else {
+            listAccessByIndex.addError(new AccessByIndexOnNonList(listAccessByIndex.getLine()));
+        }
         return null;
     }
 
@@ -243,13 +281,11 @@ public class ExpressionTypeChecker extends Visitor<Type> {
 
     @Override
     public Type visit(IntValue intValue) {
-        //Todo
-        return null;
+        return new IntType();
     }
 
     @Override
     public Type visit(BoolValue boolValue) {
-        //Todo
-        return null;
+        return new BoolType();
     }
 }
