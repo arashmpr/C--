@@ -5,28 +5,19 @@ import main.ast.nodes.expression.operators.BinaryOperator;
 import main.ast.nodes.expression.operators.UnaryOperator;
 import main.ast.nodes.expression.values.primitive.BoolValue;
 import main.ast.nodes.expression.values.primitive.IntValue;
-import main.ast.types.ListType;
-import main.ast.types.NoType;
-import main.ast.types.Type;
+import main.ast.types.*;
 import main.ast.types.primitives.BoolType;
 import main.ast.types.primitives.IntType;
 import main.ast.types.primitives.VoidType;
-import main.compileError.CompileError;
-import main.compileError.typeError.AccessByIndexOnNonList;
-import main.compileError.typeError.ListIndexNotInt;
-import main.compileError.typeError.UnsupportedOperandType;
-import main.compileError.typeError.VarNotDeclared;
+import main.compileError.typeError.*;
 import main.symbolTable.SymbolTable;
 import main.symbolTable.exceptions.ItemNotFoundException;
-import main.symbolTable.items.FunctionSymbolTableItem;
 import main.symbolTable.items.StructSymbolTableItem;
 import main.symbolTable.items.SymbolTableItem;
 import main.symbolTable.items.VariableSymbolTableItem;
 import main.visitor.Visitor;
 
-import javax.naming.BinaryRefAddr;
-import javax.xml.stream.events.NotationDeclaration;
-import java.time.temporal.ValueRange;
+import java.util.ArrayList;
 
 public class ExpressionTypeChecker extends Visitor<Type> {
 
@@ -46,12 +37,12 @@ public class ExpressionTypeChecker extends Visitor<Type> {
         //add, sub, mult, div
         if(
                 operation == BinaryOperator.add
-                ||
-                operation == BinaryOperator.sub
-                ||
-                operation == BinaryOperator.mult
-                ||
-                operation == BinaryOperator.div
+                        ||
+                        operation == BinaryOperator.sub
+                        ||
+                        operation == BinaryOperator.mult
+                        ||
+                        operation == BinaryOperator.div
         ) {
             if(typeLValue instanceof IntType && typeRValue instanceof IntType) { // int * int -> int
                 return new IntType();
@@ -102,8 +93,8 @@ public class ExpressionTypeChecker extends Visitor<Type> {
 
         //gt, lt
         if(
-                        operation == BinaryOperator.gt
-                ||
+                operation == BinaryOperator.gt
+                        ||
                         operation == BinaryOperator.lt
         ) {
             if(typeLValue instanceof IntType && typeRValue instanceof IntType) { // int * int -> bool
@@ -125,7 +116,7 @@ public class ExpressionTypeChecker extends Visitor<Type> {
 
         //and, or
         if(
-                        operation == BinaryOperator.and
+                operation == BinaryOperator.and
                         ||
                         operation == BinaryOperator.or
         ) {
@@ -213,8 +204,20 @@ public class ExpressionTypeChecker extends Visitor<Type> {
 
     @Override
     public Type visit(FunctionCall funcCall) {
-        //Todo
-        return null;
+        Type functionCallType = funcCall.getInstance().accept(this);
+        if (functionCallType instanceof FptrType) {
+            ArrayList<Expression> args = funcCall.getArgs();
+            for (Expression arg : args) {
+                if (!(arg.accept(this) instanceof FptrType)) {
+                    funcCall.addError(new ArgsInFunctionCallNotMatchDefinition(funcCall.getLine()));
+                    return new NoType();
+                }
+            }
+            return ((FptrType) functionCallType).getReturnType();
+        } else {
+            funcCall.addError(new CallOnNoneFptrType(funcCall.getLine()));
+            return new NoType();
+        }
     }
 
     @Override
@@ -257,26 +260,70 @@ public class ExpressionTypeChecker extends Visitor<Type> {
 
     @Override
     public Type visit(StructAccess structAccess) {
-        //Todo
-        return null;
+        Type structType = structAccess.getInstance().accept(this);
+        Identifier structElement = structAccess.getElement();
+        try {
+            if (structType instanceof StructType) {
+                var structKey = StructSymbolTableItem.START_KEY + ((StructType) structType).getStructName().getName();
+                SymbolTableItem structSymbolTableItem = SymbolTable.root.getItem(structKey);
+                try {
+                    var variableKey = VariableSymbolTableItem.START_KEY + structElement.getName();
+                    SymbolTableItem variableSymbolTableItem = ((StructSymbolTableItem) structSymbolTableItem).getStructSymbolTable().getItem(variableKey);
+                    return  ((VariableSymbolTableItem)variableSymbolTableItem).getType();
+                } catch (ItemNotFoundException e) {
+                    structAccess.addError(new StructMemberNotFound(structAccess.getLine(),((StructSymbolTableItem) structSymbolTableItem).getStructDeclaration().getStructName().getName(), structElement.getName()));
+                    return new NoType();
+                }
+            } else {
+                structAccess.addError(new AccessOnNonStruct(structAccess.getLine()));
+                return new NoType();
+            }
+        } catch (ItemNotFoundException e) {
+            structAccess.addError(new StructNotDeclared(structAccess.getLine(), ((StructType) structType).getStructName().getName()));
+            return new NoType();
+        }
     }
 
     @Override
     public Type visit(ListSize listSize) {
-        //Todo
-        return null;
+        Type list = listSize.getArg().accept(this);
+        if(list instanceof ListType) {
+            return new IntType();
+        } else {
+            listSize.addError(new GetSizeOfNonList(listSize.getLine()));
+            return new NoType();
+        }
     }
 
     @Override
     public Type visit(ListAppend listAppend) {
-        //Todo
+        Type listType = listAppend.getListArg().accept(this);
+        if(listType instanceof ListType) {
+            Type listElementType = ((ListType) listType).getType();
+            Type elementRValueType = listAppend.getElementArg().accept(this);
+            if(listElementType.getClass() == elementRValueType.getClass()) {
+                if(listElementType instanceof NoType) {
+                    return new NoType();
+                } else {
+                    return new VoidType();
+                }
+            } else {
+                listAppend.addError(new NewElementTypeNotMatchListType(listAppend.getLine()));
+            }
+        }
+        if(listType instanceof NoType) {
+            return new NoType();
+        }
+        else {
+            listAppend.addError(new AppendToNonList(listAppend.getLine()));
+        }
         return null;
     }
 
     @Override
     public Type visit(ExprInPar exprInPar) {
-        //Todo
-        return null;
+        ArrayList<Expression> inputExprs = exprInPar.getInputs();
+        return inputExprs.get(0).accept(this);
     }
 
     @Override

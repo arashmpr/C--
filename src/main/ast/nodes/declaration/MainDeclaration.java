@@ -20,6 +20,7 @@ public class MainDeclaration extends Declaration{
     }
     @Override
     public <T> T accept(IVisitor<T> visitor) {
+        System.out.println();
         return visitor.visit(this);
     }
 
