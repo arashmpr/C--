@@ -1,2 +1,4 @@
-# C--
-it's a compiler made with antlr
+### C-- COMPILER
+
+Compiler project for university made with antlr
+
